@@ -92,6 +92,13 @@
         .legend-item:last-child{margin-bottom:0}
         .legend-line{width:20px;height:2px}
         .legend-line.dashed{background:repeating-linear-gradient(to right,#facc15 0px,#facc15 4px,transparent 4px,transparent 8px)}
+        .code-textarea{width:100%;height:100%;padding:12px;background:#0a0a0f;color:#d1d5db;font-family:'Consolas','Monaco',monospace;font-size:12px;border:none;outline:none;resize:none;line-height:1.5}
+        .btn-edit{padding:4px 8px;font-size:10px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s}
+        .btn-edit:hover{background:#06b6d4}
+        .btn-save{padding:4px 8px;font-size:10px;background:#059669;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s;margin-right:4px}
+        .btn-save:hover{background:#047857}
+        .btn-cancel{padding:4px 8px;font-size:10px;background:#374151;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s}
+        .btn-cancel:hover{background:#4b5563}
     </style>
 </head>
 <body>
@@ -108,15 +115,15 @@
                     <button class="view-btn" data-view="viewer">Viewer</button>
                     <button class="view-btn" data-view="code">Code</button>
                 </div>
-                <button class="btn" id="openFileBtn">рџ“‚ Open File</button>
+                <button class="btn" id="openFileBtn">📂 Open File</button>
                 <input type="file" id="fileInput" accept=".gcode,.gco,.g,.nc,.txt,.tap,.ncc,.cnc" style="display:none">
             </div>
         </div>
         <div class="toolbar">
             <div class="toolbar-group">
-                <button class="icon-btn" id="btnStart" title="Go to start">вЏ®</button>
-                <button class="icon-btn play" id="btnPlay" title="Play">в–¶</button>
-                <button class="icon-btn" id="btnEnd" title="Go to end">вЏ­</button>
+                <button class="icon-btn" id="btnStart" title="Go to start">⏮</button>
+                <button class="icon-btn play" id="btnPlay" title="Play">▶</button>
+                <button class="icon-btn" id="btnEnd" title="Go to end">⏭</button>
                 <input type="range" id="progressBar" min="0" max="0" value="0">
                 <span class="value" id="progressText">0 / 0</span>
             </div>
@@ -130,13 +137,13 @@
                 <span class="label">Z:</span>
                 <input type="range" id="zMinSlider" min="0" max="100" value="0" style="width:60px">
                 <span class="value" id="zMinVal">0.0</span>
-                <span class="label">вЂ”</span>
+                <span class="label">—</span>
                 <input type="range" id="zMaxSlider" min="0" max="100" value="100" style="width:60px">
                 <span class="value" id="zMaxVal">10.0mm</span>
             </div>
             <div class="toolbar-divider"></div>
             <div class="toolbar-group">
-                <label class="checkbox-label"><input type="checkbox" id="showG0" checked><span style="color:#facc15">G0 Travel</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="showG0" checked><span style="color:#facc15">G0 Jog</span></label>
                 <label class="checkbox-label"><input type="checkbox" id="showG1" checked><span style="color:#34d399">G1 Linear</span></label>
                 <label class="checkbox-label"><input type="checkbox" id="showG2G3" checked><span style="color:#60a5fa">G2/G3 Arc</span></label>
             </div>
@@ -145,7 +152,10 @@
             <div class="code-panel" id="codePanel">
                 <div class="panel-header">
                     <span class="panel-title">G-Code Editor</span>
-                    <span class="panel-info" id="commandCount">0 commands</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="panel-info" id="commandCount">0 commands</span>
+                        <div class="edit-buttons"></div>
+                    </div>
                 </div>
                 <div class="code-list" id="codeList"></div>
             </div>
@@ -153,12 +163,12 @@
                 <canvas class="viewer-canvas" id="viewerCanvas"></canvas>
                 <div class="viewer-controls">
                     <button class="viewer-btn" id="zoomIn" title="Zoom In">+</button>
-                    <button class="viewer-btn" id="zoomOut" title="Zoom Out">в€’</button>
-                    <button class="viewer-btn" id="resetView" title="Reset View">вџІ</button>
+                    <button class="viewer-btn" id="zoomOut" title="Zoom Out">−</button>
+                    <button class="viewer-btn" id="resetView" title="Reset View">⟲</button>
                 </div>
                 <div class="scale-indicator" id="scaleIndicator">Scale: 100%</div>
                 <div class="legend">
-                    <div class="legend-item"><div class="legend-line dashed"></div><span style="color:#facc15">G0 Travel</span></div>
+                    <div class="legend-item"><div class="legend-line dashed"></div><span style="color:#facc15">G0 Jog</span></div>
                     <div class="legend-item"><div class="legend-line" style="background:#34d399"></div><span style="color:#34d399">G1 Linear</span></div>
                     <div class="legend-item"><div class="legend-line" style="background:#60a5fa"></div><span style="color:#60a5fa">G2 Arc CW</span></div>
                     <div class="legend-item"><div class="legend-line" style="background:#c084fc"></div><span style="color:#c084fc">G3 Arc CCW</span></div>
@@ -171,7 +181,7 @@
         </div>
         <div class="drag-overlay" id="dragOverlay">
             <div class="drag-box">
-                <div class="drag-icon">рџ“„</div>
+                <div class="drag-icon">📄</div>
                 <div class="drag-text">Drop G-Code / TAP file here</div>
                 <div class="drag-hint">Supported: .gcode, .tap, .nc, .g, .ncc, .cnc</div>
             </div>
@@ -350,6 +360,72 @@ G3X110.000Y135.000I-25.000J0.000
 G1X50.000
 G3X25.000Y110.000I-0.000J-25.000
 G1Y50.000
+X25.040Y48.578Z-2.285
+X25.162Y47.155Z-2.570
+X25.366Y45.738Z-2.857
+X25.651Y44.333Z-3.143
+X26.015Y42.948Z-3.430
+X26.457Y41.590Z-3.715
+X26.973Y40.265Z-4.000
+X27.584Y38.931Z-4.000
+G3X50.000Y25.000I22.416J11.069
+G1X110.000Y25.000
+G3X135.000Y50.000I0.000J25.000
+G1Y110.000
+G3X110.000Y135.000I-25.000J0.000
+G1X50.000
+G3X25.000Y110.000I-0.000J-25.000
+G1Y50.000
+X25.040Y48.578Z-4.285
+X25.162Y47.155Z-4.570
+X25.366Y45.738Z-4.857
+X25.651Y44.333Z-5.143
+X26.015Y42.948Z-5.430
+X26.457Y41.590Z-5.715
+X26.973Y40.265Z-6.000
+X27.584Y38.931Z-6.000
+G3X50.000Y25.000I22.416J11.069
+G1X110.000Y25.000
+G3X135.000Y50.000I0.000J25.000
+G1Y110.000
+G3X110.000Y135.000I-25.000J0.000
+G1X50.000
+G3X25.000Y110.000I-0.000J-25.000
+G1Y50.000
+X25.040Y48.578Z-6.285
+X25.162Y47.155Z-6.570
+X25.366Y45.738Z-6.857
+X25.651Y44.333Z-7.143
+X26.015Y42.948Z-7.430
+X26.457Y41.590Z-7.715
+X26.973Y40.265Z-8.000
+X27.584Y38.931Z-8.000
+G3X50.000Y25.000I22.416J11.069
+G1X110.000Y25.000
+G3X135.000Y50.000I0.000J25.000
+G1Y110.000
+G3X110.000Y135.000I-25.000J0.000
+G1X50.000
+G3X25.000Y110.000I-0.000J-25.000
+G1Y50.000
+X25.040Y48.578Z-8.285
+X25.162Y47.155Z-8.570
+X25.366Y45.738Z-8.857
+X25.651Y44.333Z-9.143
+X26.015Y42.948Z-9.430
+X26.457Y41.590Z-9.715
+X26.973Y40.265Z-10.000
+X27.584Y38.931Z-10.000
+G3X50.000Y25.000I22.416J11.069
+G1X110.000Y25.000
+G3X135.000Y50.000I0.000J25.000
+G1Y110.000
+G3X110.000Y135.000I-25.000J0.000
+G1X50.000
+G3X25.000Y110.000I-0.000J-25.000
+G1Y50.000
+G3X26.973Y40.265I25.000J-0.000
+G3X50.000Y25.000I23.027J9.735
 G0Z10.000
 G0X0.000Y0.000
 G0Z10.000
@@ -365,7 +441,10 @@ M30`;
         showG0: true, showG1: true, showG2G3: true,
         zMin: 0, zMax: 10,
         scale: 1, offsetX: 0, offsetY: 0,
-        fileName: 'example.tap'
+        fileName: 'example.tap',
+        isEditing: false,
+        editText: '',
+        originalText: ''
     };
     let playInt = null, isDrag = false, dragSt = { x: 0, y: 0 };
 
@@ -381,36 +460,89 @@ M30`;
         S.stats = r.stats;
         S.currentLine = 0;
         S.fileName = name || 'file.gcode';
+        S.originalText = text;
         if (r.stats) { S.zMin = r.stats.minZ; S.zMax = r.stats.maxZ; }
         renderAll();
     }
+
+    // ========== Edit ==========
+    window.handleEdit = function() {
+        S.editText = S.originalText;
+        S.isEditing = true;
+        renderCode();
+        setTimeout(() => {
+            const ta = document.getElementById('codeTextarea');
+            if (ta) ta.focus();
+        }, 100);
+    };
+
+    window.handleSave = function() {
+        loadGCode(S.editText, S.fileName);
+        S.isEditing = false;
+        renderCode();
+    };
+
+    window.handleCancel = function() {
+        S.isEditing = false;
+        renderCode();
+    };
 
     // ========== Render ==========
     function renderAll() { renderCode(); renderViewer(); renderStats(); updateToolbar(); }
 
     function renderCode() {
         const list = $('codeList');
+        const panelHeader = list.parentElement.querySelector('.panel-header');
+
+        // Update header buttons
+        if (panelHeader) {
+            const btnContainer = panelHeader.querySelector('.edit-buttons');
+            if (btnContainer) {
+                if (S.isEditing) {
+                    btnContainer.innerHTML = '<button class="btn-save" onclick="handleSave()">💾 Save</button><button class="btn-cancel" onclick="handleCancel()">✕ Cancel</button>';
+                } else {
+                    btnContainer.innerHTML = '<button class="btn-edit" onclick="handleEdit()">✏️ Edit</button>';
+                }
+            }
+        }
+
         list.innerHTML = '';
-        S.commands.forEach(cmd => {
-            const d = document.createElement('div');
-            d.className = 'code-line';
-            if (cmd.line === S.currentLine) d.classList.add('active');
-            else if (cmd.line < S.currentLine) d.classList.add('past');
-            d.dataset.line = cmd.line;
 
-            let cc = 'color-other', badge = '';
-            if (cmd.type === 'comment') cc = 'color-comment';
-            else if (cmd.type === 'G0') { cc = 'color-g0'; badge = '<span class="line-badge badge-travel">TRAVEL</span>'; }
-            else if (cmd.type === 'G1') { cc = 'color-g1'; badge = '<span class="line-badge badge-linear">LINEAR</span>'; }
-            else if (cmd.type === 'G2') { cc = 'color-g2'; badge = '<span class="line-badge badge-arc-cw">ARC CW</span>'; }
-            else if (cmd.type === 'G3') { cc = 'color-g3'; badge = '<span class="line-badge badge-arc-ccw">ARC CCW</span>'; }
-            else if (cmd.type === 'G28') cc = 'color-g28';
+        if (S.isEditing) {
+            // Show textarea for editing
+            const textarea = document.createElement('textarea');
+            textarea.id = 'codeTextarea';
+            textarea.className = 'code-textarea';
+            textarea.value = S.editText;
+            textarea.spellcheck = false;
+            textarea.addEventListener('input', (e) => {
+                S.editText = e.target.value;
+            });
+            list.appendChild(textarea);
+            $('commandCount').textContent = 'Editing...';
+        } else {
+            // Show code list
+            S.commands.forEach(cmd => {
+                const d = document.createElement('div');
+                d.className = 'code-line';
+                if (cmd.line === S.currentLine) d.classList.add('active');
+                else if (cmd.line < S.currentLine) d.classList.add('past');
+                d.dataset.line = cmd.line;
 
-            d.innerHTML = '<span class="line-num">' + cmd.line + '</span><span class="line-content ' + cc + '">' + esc(cmd.raw) + '</span>' + badge;
-            d.addEventListener('click', () => { S.currentLine = cmd.line; renderAll(); });
-            list.appendChild(d);
-        });
-        $('commandCount').textContent = S.commands.length + ' commands';
+                let cc = 'color-other', badge = '';
+                if (cmd.type === 'comment') cc = 'color-comment';
+                else if (cmd.type === 'G0') { cc = 'color-g0'; badge = '<span class="line-badge badge-travel">TRAVEL</span>'; }
+                else if (cmd.type === 'G1') { cc = 'color-g1'; badge = '<span class="line-badge badge-linear">LINEAR</span>'; }
+                else if (cmd.type === 'G2') { cc = 'color-g2'; badge = '<span class="line-badge badge-arc-cw">ARC CW</span>'; }
+                else if (cmd.type === 'G3') { cc = 'color-g3'; badge = '<span class="line-badge badge-arc-ccw">ARC CCW</span>'; }
+                else if (cmd.type === 'G28') cc = 'color-g28';
+
+                d.innerHTML = '<span class="line-num">' + cmd.line + '</span><span class="line-content ' + cc + '">' + esc(cmd.raw) + '</span>' + badge;
+                d.addEventListener('click', () => { S.currentLine = cmd.line; renderAll(); });
+                list.appendChild(d);
+            });
+            $('commandCount').textContent = S.commands.length + ' commands';
+        }
     }
 
     function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
@@ -518,9 +650,9 @@ M30`;
 
                 // Canvas Y is inverted, so:
                 // - We negate angles to convert from Y-up to Y-down
-                // - G2 (CW in Y-up) becomes CCW in Y-down в†’ anticlockwise = true
-                // - G3 (CCW in Y-up) becomes CW in Y-down в†’ anticlockwise = false
-                // So anticlockwise = !seg.arc.clockwise (G2=trueв†’anticlockwise=true)
+                // - G2 (CW in Y-up) becomes CCW in Y-down → anticlockwise = true
+                // - G3 (CCW in Y-up) becomes CW in Y-down → anticlockwise = false
+                // So anticlockwise = !seg.arc.clockwise (G2=true→anticlockwise=true)
                 const anticlockwise = !seg.arc.clockwise;
 
                 if (isFull) {
@@ -572,9 +704,9 @@ M30`;
         h += '<div class="stat-row"><span class="stat-label">Commands</span><span class="stat-value">' + s.commandCount + '</span></div>';
         h += '<div class="stat-row"><span class="stat-label">Layers</span><span class="stat-value">' + s.layers + '</span></div>';
         h += '<div class="stat-section"><div class="stat-section-title">Dimensions</div>';
-        h += '<div class="stat-row"><span class="stat-label">X</span><span class="stat-value">' + s.minX.toFixed(1) + ' вЂ” ' + s.maxX.toFixed(1) + 'mm</span></div>';
-        h += '<div class="stat-row"><span class="stat-label">Y</span><span class="stat-value">' + s.minY.toFixed(1) + ' вЂ” ' + s.maxY.toFixed(1) + 'mm</span></div>';
-        h += '<div class="stat-row"><span class="stat-label">Z</span><span class="stat-value">' + s.minZ.toFixed(1) + ' вЂ” ' + s.maxZ.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">X</span><span class="stat-value">' + s.minX.toFixed(1) + ' — ' + s.maxX.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Y</span><span class="stat-value">' + s.minY.toFixed(1) + ' — ' + s.maxY.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Z</span><span class="stat-value">' + s.minZ.toFixed(1) + ' — ' + s.maxZ.toFixed(1) + 'mm</span></div>';
         h += '<div class="stat-row"><span class="stat-label">Width</span><span class="stat-value">' + (s.maxX - s.minX).toFixed(1) + 'mm</span></div>';
         h += '<div class="stat-row"><span class="stat-label">Height</span><span class="stat-value">' + (s.maxY - s.minY).toFixed(1) + 'mm</span></div></div>';
         h += '<div class="stat-section"><div class="stat-section-title">Extrusion</div>';
@@ -597,8 +729,8 @@ M30`;
         $('progressBar').value = S.currentLine;
         $('progressText').textContent = S.currentLine + ' / ' + S.commands.length;
         const pb = $('btnPlay');
-        if (S.isPlaying) { pb.textContent = 'вЏё'; pb.className = 'icon-btn pause'; }
-        else { pb.textContent = 'в–¶'; pb.className = 'icon-btn play'; }
+        if (S.isPlaying) { pb.textContent = '⏸'; pb.className = 'icon-btn pause'; }
+        else { pb.textContent = '▶'; pb.className = 'icon-btn play'; }
         if (S.stats) {
             const zs1 = $('zMinSlider'), zs2 = $('zMaxSlider');
             zs1.min = S.stats.minZ; zs1.max = S.stats.maxZ; zs1.step = 0.1; zs1.value = S.zMin;
