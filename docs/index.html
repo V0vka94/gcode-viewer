@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Code Viewer</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#fff;height:100vh;overflow:hidden}
+        ::-webkit-scrollbar{width:6px;height:6px}
+        ::-webkit-scrollbar-track{background:#111827}
+        ::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}
+        ::-webkit-scrollbar-thumb:hover{background:#4b5563}
+        .app{display:flex;flex-direction:column;height:100vh}
+        .header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#111827;border-bottom:1px solid #1f2937;flex-shrink:0}
+        .header-left{display:flex;align-items:center;gap:12px}
+        .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#06b6d4,#10b981);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px}
+        .title{font-size:18px;font-weight:600;background:linear-gradient(to right,#06b6d4,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .filename{font-size:12px;color:#9ca3af;background:#1f2937;padding:4px 8px;border-radius:4px}
+        .header-right{display:flex;align-items:center;gap:8px}
+        .view-modes{display:flex;background:#1f2937;border-radius:8px;overflow:hidden}
+        .view-btn{padding:6px 12px;font-size:12px;color:#9ca3af;background:none;border:none;cursor:pointer;transition:all .15s}
+        .view-btn:hover{color:#fff}
+        .view-btn.active{background:#0891b2;color:#fff}
+        .btn{padding:6px 12px;font-size:12px;background:#1f2937;color:#d1d5db;border:none;border-radius:8px;cursor:pointer;transition:all .15s}
+        .btn:hover{background:#374151}
+        .toolbar{display:flex;align-items:center;gap:16px;padding:8px 16px;background:rgba(17,24,39,.5);border-bottom:1px solid #1f2937;flex-shrink:0;flex-wrap:wrap}
+        .toolbar-group{display:flex;align-items:center;gap:8px}
+        .toolbar-divider{width:1px;height:16px;background:#374151}
+        .icon-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;background:#1f2937;border:none;color:#fff;cursor:pointer;font-size:12px;transition:all .15s}
+        .icon-btn:hover{background:#374151}
+        .icon-btn.play{background:#059669}
+        .icon-btn.play:hover{background:#047857}
+        .icon-btn.pause{background:#dc2626}
+        .icon-btn.pause:hover{background:#b91c1c}
+        input[type="range"]{-webkit-appearance:none;width:120px;height:4px;background:#374151;border-radius:2px;outline:none}
+        input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#06b6d4;border-radius:50%;cursor:pointer}
+        .label{font-size:12px;color:#9ca3af}
+        .value{font-size:12px;color:#d1d5db;font-family:monospace;min-width:60px}
+        .checkbox-label{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px}
+        .checkbox-label input{width:12px;height:12px}
+        .main{display:flex;flex:1;overflow:hidden}
+        .code-panel{width:400px;display:flex;flex-direction:column;background:#111827;border-right:1px solid #1f2937}
+        .code-panel.full{width:100%}
+        .code-panel.hidden{display:none}
+        .panel-header{padding:8px 12px;border-bottom:1px solid #1f2937;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+        .panel-title{font-size:12px;color:#9ca3af;font-weight:500}
+        .panel-info{font-size:12px;color:#6b7280}
+        .code-list{flex:1;overflow-y:auto;font-family:'Consolas','Monaco',monospace;font-size:12px}
+        .code-line{display:flex;align-items:flex-start;gap:8px;padding:2px 12px;cursor:pointer;border-left:2px solid transparent;transition:background .1s}
+        .code-line:hover{background:rgba(31,41,55,.5)}
+        .code-line.active{background:rgba(6,182,212,.1);border-left-color:#06b6d4}
+        .code-line.past{opacity:.6}
+        .line-num{color:#4b5563;width:40px;text-align:right;flex-shrink:0;user-select:none}
+        .line-content{flex:1;word-break:break-all}
+        .line-badge{font-size:10px;padding:1px 4px;border-radius:3px;flex-shrink:0}
+        .color-comment{color:#6b7280}
+        .color-g0{color:#facc15}
+        .color-g1{color:#34d399}
+        .color-g2{color:#60a5fa}
+        .color-g3{color:#c084fc}
+        .color-g28{color:#fb923c}
+        .color-other{color:#d1d5db}
+        .badge-travel{background:rgba(250,204,21,.2);color:#facc15}
+        .badge-linear{background:rgba(52,211,153,.2);color:#34d399}
+        .badge-arc-cw{background:rgba(96,165,250,.2);color:#60a5fa}
+        .badge-arc-ccw{background:rgba(192,132,252,.2);color:#c084fc}
+        .viewer-panel{flex:1;position:relative;display:flex;flex-direction:column}
+        .viewer-panel.hidden{display:none}
+        .viewer-canvas{width:100%;height:100%;cursor:grab}
+        .viewer-canvas:active{cursor:grabbing}
+        .viewer-controls{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:8px}
+        .viewer-btn{width:32px;height:32px;background:rgba(17,24,39,.8);backdrop-filter:blur(4px);border:none;border-radius:6px;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+        .viewer-btn:hover{background:rgba(55,65,81,.8)}
+        .scale-indicator{position:absolute;bottom:12px;left:12px;font-size:12px;color:#9ca3af;background:rgba(17,24,39,.6);padding:4px 8px;border-radius:4px;backdrop-filter:blur(4px)}
+        .stats-panel{width:220px;border-left:1px solid #1f2937;background:#111827;overflow-y:auto;flex-shrink:0}
+        .stats-panel.hidden{display:none}
+        .stats-content{padding:12px}
+        .stat-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+        .stat-label{font-size:12px;color:#9ca3af}
+        .stat-value{font-size:12px;color:#d1d5db;font-family:monospace}
+        .stat-section{border-top:1px solid #1f2937;padding-top:8px;margin-top:8px}
+        .stat-section-title{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+        .drag-overlay{position:fixed;inset:0;background:rgba(10,10,15,.9);display:none;align-items:center;justify-content:center;z-index:1000}
+        .drag-overlay.active{display:flex}
+        .drag-box{border:2px dashed #06b6d4;border-radius:16px;padding:64px;text-align:center}
+        .drag-icon{font-size:48px;margin-bottom:16px}
+        .drag-text{font-size:20px;color:#06b6d4}
+        .drag-hint{font-size:14px;color:#6b7280;margin-top:8px}
+        .legend{position:absolute;bottom:12px;right:12px;background:rgba(17,24,39,.8);backdrop-filter:blur(4px);padding:8px 12px;border-radius:6px;font-size:11px}
+        .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+        .legend-item:last-child{margin-bottom:0}
+        .legend-line{width:20px;height:2px}
+        .legend-line.dashed{background:repeating-linear-gradient(to right,#facc15 0px,#facc15 4px,transparent 4px,transparent 8px)}
+        .code-textarea{width:100%;height:100%;padding:12px;background:#0a0a0f;color:#d1d5db;font-family:'Consolas','Monaco',monospace;font-size:12px;border:none;outline:none;resize:none;line-height:1.5}
+        .btn-edit{padding:4px 8px;font-size:10px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s}
+        .btn-edit:hover{background:#06b6d4}
+        .btn-save{padding:4px 8px;font-size:10px;background:#059669;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s;margin-right:4px}
+        .btn-save:hover{background:#047857}
+        .btn-cancel{padding:4px 8px;font-size:10px;background:#374151;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .15s}
+        .btn-cancel:hover{background:#4b5563}
+    </style>
+</head>
+<body>
+    <div class="app" id="app">
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">G</div>
+                <div class="title">G-Code Viewer</div>
+                <div class="filename" id="fileName">example.tap</div>
+            </div>
+            <div class="header-right">
+                <div class="view-modes">
+                    <button class="view-btn active" data-view="split">Split</button>
+                    <button class="view-btn" data-view="viewer">Viewer</button>
+                    <button class="view-btn" data-view="code">Code</button>
+                </div>
+                <button class="btn" id="openFileBtn">📂 Open File</button>
+                <input type="file" id="fileInput" accept=".gcode,.gco,.g,.nc,.txt,.tap,.ncc,.cnc" style="display:none">
+            </div>
+        </div>
+        <div class="toolbar">
+            <div class="toolbar-group">
+                <button class="icon-btn" id="btnStart" title="Go to start">⏮</button>
+                <button class="icon-btn play" id="btnPlay" title="Play">▶</button>
+                <button class="icon-btn" id="btnEnd" title="Go to end">⏭</button>
+                <input type="range" id="progressBar" min="0" max="0" value="0">
+                <span class="value" id="progressText">0 / 0</span>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-group">
+                <span class="label">Speed:</span>
+                <input type="range" id="speedSlider" min="1" max="100" value="50">
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-group">
+                <span class="label">Z:</span>
+                <input type="range" id="zMinSlider" min="0" max="100" value="0" style="width:60px">
+                <span class="value" id="zMinVal">0.0</span>
+                <span class="label">—</span>
+                <input type="range" id="zMaxSlider" min="0" max="100" value="100" style="width:60px">
+                <span class="value" id="zMaxVal">10.0mm</span>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-group">
+                <label class="checkbox-label"><input type="checkbox" id="showG0" checked><span style="color:#facc15">G0 Jog</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="showG1" checked><span style="color:#34d399">G1 Linear</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="showG2G3" checked><span style="color:#60a5fa">G2/G3 Arc</span></label>
+            </div>
+        </div>
+        <div class="main">
+            <div class="code-panel" id="codePanel">
+                <div class="panel-header">
+                    <span class="panel-title">G-Code Editor</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="panel-info" id="commandCount">0 commands</span>
+                        <div class="edit-buttons"></div>
+                    </div>
+                </div>
+                <div class="code-list" id="codeList"></div>
+            </div>
+            <div class="viewer-panel" id="viewerPanel">
+                <canvas class="viewer-canvas" id="viewerCanvas"></canvas>
+                <div class="viewer-controls">
+                    <button class="viewer-btn" id="zoomIn" title="Zoom In">+</button>
+                    <button class="viewer-btn" id="zoomOut" title="Zoom Out">−</button>
+                    <button class="viewer-btn" id="resetView" title="Reset View">⟲</button>
+                </div>
+                <div class="scale-indicator" id="scaleIndicator">Scale: 100%</div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-line dashed"></div><span style="color:#facc15">G0 Jog</span></div>
+                    <div class="legend-item"><div class="legend-line" style="background:#34d399"></div><span style="color:#34d399">G1 Linear</span></div>
+                    <div class="legend-item"><div class="legend-line" style="background:#60a5fa"></div><span style="color:#60a5fa">G2 Arc CW</span></div>
+                    <div class="legend-item"><div class="legend-line" style="background:#c084fc"></div><span style="color:#c084fc">G3 Arc CCW</span></div>
+                </div>
+            </div>
+            <div class="stats-panel" id="statsPanel">
+                <div class="panel-header"><span class="panel-title">Statistics</span></div>
+                <div class="stats-content" id="statsContent"></div>
+            </div>
+        </div>
+        <div class="drag-overlay" id="dragOverlay">
+            <div class="drag-box">
+                <div class="drag-icon">📄</div>
+                <div class="drag-text">Drop G-Code / TAP file here</div>
+                <div class="drag-hint">Supported: .gcode, .tap, .nc, .g, .ncc, .cnc</div>
+            </div>
+        </div>
+    </div>
+    <script>
+    // ========== Parser ==========
+    function extractParam(cmd, param) {
+        const r = new RegExp(param + '\\s*([+-]?\\d*\\.?\\d+)', 'i');
+        const m = cmd.match(r);
+        return m ? parseFloat(m[1]) : undefined;
+    }
+
+    function parseGCode(gcode) {
+        const lines = gcode.split('\n');
+        const commands = [];
+        const segments = [];
+
+        let cX = 0, cY = 0, cZ = 0, cE = 0, cF = 0;
+        let abs = true;
+        let lastZ = 0, layers = 0;
+        let mnx = Infinity, mxx = -Infinity;
+        let mny = Infinity, mxy = -Infinity;
+        let mnz = Infinity, mxz = -Infinity;
+        let totE = 0, cmdCnt = 0;
+
+        // Modal motion code (G0/G1/G2/G3 persists across lines)
+        let modalMotion = 'G1';
+
+        for (let i = 0; i < lines.length; i++) {
+            let raw = lines[i].trim();
+            if (!raw) continue;
+            if (raw === '%' || raw === '%%') continue;
+
+            // Remove parenthetical comments
+            raw = raw.replace(/\([^)]*\)/g, '');
+
+            // Remove semicolon comments
+            const ci = raw.indexOf(';');
+            let cl = raw;
+            if (ci >= 0) cl = raw.substring(0, ci).trim();
+
+            // Remove line numbers (N10, N20, etc.)
+            cl = cl.replace(/^N\d+\s*/i, '');
+
+            if (!cl) {
+                commands.push({ line: i + 1, raw: lines[i].trim(), type: 'comment' });
+                continue;
+            }
+
+            const uc = cl.toUpperCase();
+
+            // Determine command type
+            let type = 'other';
+            const gm = uc.match(/G\s*(\d+)/);
+            if (gm) {
+                const gn = parseInt(gm[1]);
+                if (gn === 0) type = 'G0';
+                else if (gn === 1) type = 'G1';
+                else if (gn === 2) type = 'G2';
+                else if (gn === 3) type = 'G3';
+                else if (gn === 28) type = 'G28';
+            }
+
+            // If no explicit G motion code but has coordinates, use modal motion
+            if (type === 'other' && /[XYZ]/i.test(cl)) {
+                type = modalMotion;
+            }
+
+            // Update modal motion
+            if (type === 'G0' || type === 'G1' || type === 'G2' || type === 'G3') {
+                modalMotion = type;
+            }
+
+            // Handle mode changes
+            if (/G\s*90/i.test(uc)) abs = true;
+            else if (/G\s*91/i.test(uc)) abs = false;
+
+            // Extract parameters
+            const x = extractParam(cl, 'X');
+            const y = extractParam(cl, 'Y');
+            const z = extractParam(cl, 'Z');
+            const e = extractParam(cl, 'E');
+            const f = extractParam(cl, 'F');
+            const aI = extractParam(cl, 'I');
+            const aJ = extractParam(cl, 'J');
+
+            if (f !== undefined) cF = f;
+
+            // Calculate new position
+            let nX = cX, nY = cY, nZ = cZ;
+            if (type === 'G28') {
+                nX = 0; nY = 0; nZ = 0;
+            } else {
+                if (x !== undefined) nX = abs ? x : cX + x;
+                if (y !== undefined) nY = abs ? y : cY + y;
+                if (z !== undefined) nZ = abs ? z : cZ + z;
+            }
+
+            // Track layers
+            if (nZ > lastZ && (type === 'G0' || type === 'G1') && nZ > 0.1) layers++;
+            lastZ = nZ;
+
+            const isMov = type === 'G0' || type === 'G1' || type === 'G2' || type === 'G3' || type === 'G28';
+
+            if (isMov && (x !== undefined || y !== undefined || z !== undefined || type === 'G28')) {
+                const isR = type === 'G0';
+                const isA = type === 'G2' || type === 'G3';
+
+                const seg = {
+                    start: { x: cX, y: cY, z: cZ },
+                    end: { x: nX, y: nY, z: nZ },
+                    type: isR ? 'rapid' : 'extrusion',
+                    line: i + 1,
+                    cmdType: type
+                };
+
+                if (isA && aI !== undefined && aJ !== undefined) {
+                    seg.arc = { i: aI, j: aJ, clockwise: type === 'G2' };
+                }
+
+                segments.push(seg);
+
+                if (!isR && e !== undefined) totE += abs ? e - cE : e;
+
+                cX = nX; cY = nY; cZ = nZ;
+                if (e !== undefined) cE = e;
+
+                if (cX < mnx) mnx = cX;
+                if (cX > mxx) mxx = cX;
+                if (cY < mny) mny = cY;
+                if (cY > mxy) mxy = cY;
+                if (cZ < mnz) mnz = cZ;
+                if (cZ > mxz) mxz = cZ;
+
+                cmdCnt++;
+                commands.push({ line: i + 1, raw, type, x: nX, y: nY, z: nZ, isRapid: isR });
+            } else {
+                commands.push({ line: i + 1, raw, type });
+            }
+        }
+
+        return {
+            commands, segments,
+            stats: {
+                totalLines: lines.length, commandCount: cmdCnt,
+                minX: mnx === Infinity ? 0 : mnx, maxX: mxx === -Infinity ? 0 : mxx,
+                minY: mny === Infinity ? 0 : mny, maxY: mxy === -Infinity ? 0 : mxy,
+                minZ: mnz === Infinity ? 0 : mnz, maxZ: mxz === -Infinity ? 0 : mxz,
+                totalExtrusion: totE, layers
+            }
+        };
+    }
+
+    // ========== Sample G-Code (rounded square) ==========
+    function getSampleGCode() {
+        return `T1M6
+G17
+G0Z10.000
+G0X0.000Y0.000S15000M3
+G0X25.000Y50.000Z10.000
+G1Z0.000F780.0
+G1X25.040Y48.578Z-0.285F1200.0
+X25.162Y47.155Z-0.570
+X25.366Y45.738Z-0.857
+X25.651Y44.333Z-1.143
+X26.015Y42.948Z-1.430
+X26.457Y41.590Z-1.715
+X26.973Y40.265Z-2.000
+X27.584Y38.931Z-2.000
+G3X50.000Y25.000I22.416J11.069
+G1X110.000Y25.000
+G3X135.000Y50.000I0.000J25.000
+G1Y110.000
+G3X110.000Y135.000I-25.000J0.000
+G1X50.000
+G3X25.000Y110.000I-0.000J-25.000
+G1Y50.000
+G3X26.973Y40.265I25.000J-0.000
+G3X50.000Y25.000I23.027J9.735
+G0Z10.000
+G0X0.000Y0.000
+G0Z10.000
+G0X0.000Y0.000
+M30`;
+    }
+
+    // ========== State ==========
+    let S = {
+        commands: [], segments: [], stats: null,
+        currentLine: 0, viewMode: 'split',
+        isPlaying: false, playSpeed: 50,
+        showG0: true, showG1: true, showG2G3: true,
+        zMin: 0, zMax: 10,
+        scale: 1, offsetX: 0, offsetY: 0,
+        fileName: 'example.tap',
+        isEditing: false,
+        editText: '',
+        originalText: ''
+    };
+    let playInt = null, isDrag = false, dragSt = { x: 0, y: 0 };
+
+    const $ = id => document.getElementById(id);
+    const canvas = $('viewerCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ========== Load ==========
+    function loadGCode(text, name) {
+        const r = parseGCode(text);
+        S.commands = r.commands;
+        S.segments = r.segments;
+        S.stats = r.stats;
+        S.currentLine = 0;
+        S.fileName = name || 'file.gcode';
+        S.originalText = text;
+        if (r.stats) { S.zMin = r.stats.minZ; S.zMax = r.stats.maxZ; }
+        renderAll();
+    }
+
+    // ========== Edit ==========
+    window.handleEdit = function() {
+        S.editText = S.originalText;
+        S.isEditing = true;
+        renderCode();
+        setTimeout(() => {
+            const ta = document.getElementById('codeTextarea');
+            if (ta) ta.focus();
+        }, 100);
+    };
+
+    window.handleSave = function() {
+        loadGCode(S.editText, S.fileName);
+        S.isEditing = false;
+        renderCode();
+    };
+
+    window.handleCancel = function() {
+        S.isEditing = false;
+        renderCode();
+    };
+
+    // ========== Render ==========
+    function renderAll() { renderCode(); renderViewer(); renderStats(); updateToolbar(); }
+
+    function renderCode() {
+        const list = $('codeList');
+        const panelHeader = list.parentElement.querySelector('.panel-header');
+
+        // Update header buttons
+        if (panelHeader) {
+            const btnContainer = panelHeader.querySelector('.edit-buttons');
+            if (btnContainer) {
+                if (S.isEditing) {
+                    btnContainer.innerHTML = '<button class="btn-save" onclick="handleSave()">💾 Save</button><button class="btn-cancel" onclick="handleCancel()">✕ Cancel</button>';
+                } else {
+                    btnContainer.innerHTML = '<button class="btn-edit" onclick="handleEdit()">✏️ Edit</button>';
+                }
+            }
+        }
+
+        list.innerHTML = '';
+
+        if (S.isEditing) {
+            // Show textarea for editing
+            const textarea = document.createElement('textarea');
+            textarea.id = 'codeTextarea';
+            textarea.className = 'code-textarea';
+            textarea.value = S.editText;
+            textarea.spellcheck = false;
+            textarea.addEventListener('input', (e) => {
+                S.editText = e.target.value;
+            });
+            list.appendChild(textarea);
+            $('commandCount').textContent = 'Editing...';
+        } else {
+            // Show code list
+            S.commands.forEach(cmd => {
+                const d = document.createElement('div');
+                d.className = 'code-line';
+                if (cmd.line === S.currentLine) d.classList.add('active');
+                else if (cmd.line < S.currentLine) d.classList.add('past');
+                d.dataset.line = cmd.line;
+
+                let cc = 'color-other', badge = '';
+                if (cmd.type === 'comment') cc = 'color-comment';
+                else if (cmd.type === 'G0') { cc = 'color-g0'; badge = '<span class="line-badge badge-travel">TRAVEL</span>'; }
+                else if (cmd.type === 'G1') { cc = 'color-g1'; badge = '<span class="line-badge badge-linear">LINEAR</span>'; }
+                else if (cmd.type === 'G2') { cc = 'color-g2'; badge = '<span class="line-badge badge-arc-cw">ARC CW</span>'; }
+                else if (cmd.type === 'G3') { cc = 'color-g3'; badge = '<span class="line-badge badge-arc-ccw">ARC CCW</span>'; }
+                else if (cmd.type === 'G28') cc = 'color-g28';
+
+                d.innerHTML = '<span class="line-num">' + cmd.line + '</span><span class="line-content ' + cc + '">' + esc(cmd.raw) + '</span>' + badge;
+                d.addEventListener('click', () => { S.currentLine = cmd.line; renderAll(); });
+                list.appendChild(d);
+            });
+            $('commandCount').textContent = S.commands.length + ' commands';
+        }
+    }
+
+    function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    function renderViewer() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        const w = rect.width, h = rect.height;
+
+        // Background
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, w, h);
+
+        // Grid
+        ctx.strokeStyle = '#2a2a4a';
+        ctx.lineWidth = 0.5;
+        const gs = 20 * S.scale;
+        const gox = S.offsetX % gs;
+        const goy = S.offsetY % gs;
+        for (let x = gox; x < w; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for (let y = goy; y < h; y += gs) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+        if (S.segments.length === 0) return;
+
+        // Bounds
+        let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+        S.segments.forEach(s => {
+            [s.start, s.end].forEach(p => {
+                if (p.x < mnx) mnx = p.x; if (p.x > mxx) mxx = p.x;
+                if (p.y < mny) mny = p.y; if (p.y > mxy) mxy = p.y;
+            });
+        });
+
+        const pad = 40;
+        const aW = w - pad * 2, aH = h - pad * 2;
+        const rX = (mxx - mnx) || 1, rY = (mxy - mny) || 1;
+        const bS = Math.min(aW / rX, aH / rY);
+        const fS = bS * S.scale;
+        const cX = (mnx + mxx) / 2, cY = (mny + mxy) / 2;
+
+        // Transform G-code coords to screen coords
+        function tr(x, y) {
+            return {
+                x: w / 2 + (x - cX) * fS + S.offsetX,
+                y: h / 2 - (y - cY) * fS + S.offsetY
+            };
+        }
+
+        // Draw segments
+        S.segments.forEach(seg => {
+            // Z filter
+            const sz1 = Math.min(seg.start.z, seg.end.z);
+            const sz2 = Math.max(seg.start.z, seg.end.z);
+            if (sz2 < S.zMin || sz1 > S.zMax) return;
+
+            const isR = seg.type === 'rapid';
+            const isA = !!seg.arc;
+            if (isR && !S.showG0) return;
+            if (!isR && !isA && !S.showG1) return;
+            if (isA && !S.showG2G3) return;
+
+            const st = tr(seg.start.x, seg.start.y);
+            const en = tr(seg.end.x, seg.end.y);
+            const isAct = seg.line <= S.currentLine && S.currentLine > 0;
+            const isCur = seg.line === S.currentLine;
+
+            let color, lw;
+            if (isCur) { color = '#ff6b6b'; lw = 3; }
+            else if (isAct) {
+                if (isR) { color = 'rgba(250,204,21,0.5)'; lw = 1; }
+                else if (isA) { color = seg.arc.clockwise ? '#60a5fa' : '#c084fc'; lw = 2; }
+                else { color = '#34d399'; lw = 2; }
+            } else {
+                if (isR) { color = 'rgba(250,204,21,0.3)'; lw = 0.8; }
+                else if (isA) { color = seg.arc.clockwise ? 'rgba(96,165,250,0.7)' : 'rgba(192,132,252,0.7)'; lw = 1.5; }
+                else { color = 'rgba(52,211,153,0.7)'; lw = 1.5; }
+            }
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            ctx.setLineDash(isR ? [4, 4] : []);
+
+            if (seg.arc) {
+                // Arc center in G-code coordinates
+                const arcCX = seg.start.x + seg.arc.i;
+                const arcCY = seg.start.y + seg.arc.j;
+
+                // Transform center to screen
+                const ct = tr(arcCX, arcCY);
+
+                // Radius in screen coordinates
+                const rad = Math.sqrt(seg.arc.i ** 2 + seg.arc.j ** 2) * fS;
+
+                // Angles in G-code coordinate system (Y-up)
+                const sa = Math.atan2(seg.start.y - arcCY, seg.start.x - arcCX);
+                const ea = Math.atan2(seg.end.y - arcCY, seg.end.x - arcCX);
+
+                // Check if full circle
+                const isFull = Math.abs(seg.start.x - seg.end.x) < 0.001 &&
+                               Math.abs(seg.start.y - seg.end.y) < 0.001;
+
+                // Canvas Y is inverted, so:
+                // - We negate angles to convert from Y-up to Y-down
+                // - G2 (CW in Y-up) becomes CCW in Y-down → anticlockwise = true
+                // - G3 (CCW in Y-up) becomes CW in Y-down → anticlockwise = false
+                // So anticlockwise = !seg.arc.clockwise (G2=true→anticlockwise=true)
+                const anticlockwise = !seg.arc.clockwise;
+
+                if (isFull) {
+                    ctx.arc(ct.x, ct.y, Math.abs(rad), 0, Math.PI * 2, anticlockwise);
+                } else {
+                    ctx.arc(ct.x, ct.y, Math.abs(rad), -sa, -ea, anticlockwise);
+                }
+            } else {
+                ctx.moveTo(st.x, st.y);
+                ctx.lineTo(en.x, en.y);
+            }
+            ctx.stroke();
+        });
+
+        ctx.setLineDash([]);
+
+        // Current position marker
+        if (S.currentLine > 0) {
+            const cs = S.segments.find(s => s.line === S.currentLine);
+            if (cs) {
+                const p = tr(cs.end.x, cs.end.y);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        // Origin
+        const o = tr(0, 0);
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        $('scaleIndicator').textContent = 'Scale: ' + (S.scale * 100).toFixed(0) + '%';
+    }
+
+    function renderStats() {
+        const s = S.stats;
+        if (!s) return;
+        let h = '<div class="stat-row"><span class="stat-label">Total Lines</span><span class="stat-value">' + s.totalLines + '</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Commands</span><span class="stat-value">' + s.commandCount + '</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Layers</span><span class="stat-value">' + s.layers + '</span></div>';
+        h += '<div class="stat-section"><div class="stat-section-title">Dimensions</div>';
+        h += '<div class="stat-row"><span class="stat-label">X</span><span class="stat-value">' + s.minX.toFixed(1) + ' — ' + s.maxX.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Y</span><span class="stat-value">' + s.minY.toFixed(1) + ' — ' + s.maxY.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Z</span><span class="stat-value">' + s.minZ.toFixed(1) + ' — ' + s.maxZ.toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Width</span><span class="stat-value">' + (s.maxX - s.minX).toFixed(1) + 'mm</span></div>';
+        h += '<div class="stat-row"><span class="stat-label">Height</span><span class="stat-value">' + (s.maxY - s.minY).toFixed(1) + 'mm</span></div></div>';
+        h += '<div class="stat-section"><div class="stat-section-title">Extrusion</div>';
+        h += '<div class="stat-row"><span class="stat-label">Total E</span><span class="stat-value">' + s.totalExtrusion.toFixed(2) + 'mm</span></div></div>';
+
+        if (S.currentLine > 0) {
+            const sg = S.segments.find(x => x.line === S.currentLine);
+            if (sg) {
+                h += '<div class="stat-section"><div class="stat-section-title">Current Position</div>';
+                h += '<div class="stat-row"><span class="stat-label">X</span><span class="stat-value">' + sg.end.x.toFixed(2) + 'mm</span></div>';
+                h += '<div class="stat-row"><span class="stat-label">Y</span><span class="stat-value">' + sg.end.y.toFixed(2) + 'mm</span></div>';
+                h += '<div class="stat-row"><span class="stat-label">Z</span><span class="stat-value">' + sg.end.z.toFixed(2) + 'mm</span></div></div>';
+            }
+        }
+        $('statsContent').innerHTML = h;
+    }
+
+    function updateToolbar() {
+        $('progressBar').max = S.commands.length;
+        $('progressBar').value = S.currentLine;
+        $('progressText').textContent = S.currentLine + ' / ' + S.commands.length;
+        const pb = $('btnPlay');
+        if (S.isPlaying) { pb.textContent = '⏸'; pb.className = 'icon-btn pause'; }
+        else { pb.textContent = '▶'; pb.className = 'icon-btn play'; }
+        if (S.stats) {
+            const zs1 = $('zMinSlider'), zs2 = $('zMaxSlider');
+            zs1.min = S.stats.minZ; zs1.max = S.stats.maxZ; zs1.step = 0.1; zs1.value = S.zMin;
+            zs2.min = S.stats.minZ; zs2.max = S.stats.maxZ; zs2.step = 0.1; zs2.value = S.zMax;
+            $('zMinVal').textContent = S.zMin.toFixed(1);
+            $('zMaxVal').textContent = S.zMax.toFixed(1) + 'mm';
+        }
+        $('fileName').textContent = S.fileName;
+    }
+
+    // ========== View Mode ==========
+    function setView(m) {
+        S.viewMode = m;
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === m));
+        const cp = $('codePanel'), vp = $('viewerPanel'), sp = $('statsPanel');
+        cp.classList.remove('full', 'hidden');
+        vp.classList.remove('hidden');
+        sp.classList.remove('hidden');
+        if (m === 'split') { cp.style.width = '400px'; }
+        else if (m === 'viewer') { cp.classList.add('hidden'); sp.classList.add('hidden'); }
+        else if (m === 'code') { vp.classList.add('hidden'); sp.classList.add('hidden'); cp.classList.add('full'); cp.style.width = '100%'; }
+        setTimeout(renderViewer, 50);
+    }
+
+    // ========== Playback ==========
+    function togglePlay() {
+        S.isPlaying = !S.isPlaying;
+        if (S.isPlaying) {
+            playInt = setInterval(() => {
+                if (S.currentLine >= S.commands.length) { S.isPlaying = false; clearInterval(playInt); updateToolbar(); return; }
+                S.currentLine++;
+                renderAll();
+                const el = $('codeList').querySelector('[data-line="' + S.currentLine + '"]');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, Math.max(10, 500 - S.playSpeed * 4.5));
+        } else { clearInterval(playInt); }
+        updateToolbar();
+    }
+
+    // ========== Events ==========
+    document.querySelectorAll('.view-btn').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+    $('openFileBtn').addEventListener('click', () => $('fileInput').click());
+    $('fileInput').addEventListener('change', e => {
+        const f = e.target.files[0];
+        if (f) { const r = new FileReader(); r.onload = ev => loadGCode(ev.target.result, f.name); r.readAsText(f); }
+    });
+    $('btnPlay').addEventListener('click', togglePlay);
+    $('btnStart').addEventListener('click', () => { S.currentLine = 0; renderAll(); });
+    $('btnEnd').addEventListener('click', () => { S.currentLine = S.commands.length; renderAll(); });
+    $('progressBar').addEventListener('input', e => { S.currentLine = parseInt(e.target.value); renderAll(); });
+    $('speedSlider').addEventListener('input', e => { S.playSpeed = parseInt(e.target.value); });
+    $('zMinSlider').addEventListener('input', e => { S.zMin = parseFloat(e.target.value); renderViewer(); updateToolbar(); });
+    $('zMaxSlider').addEventListener('input', e => { S.zMax = parseFloat(e.target.value); renderViewer(); updateToolbar(); });
+    $('showG0').addEventListener('change', e => { S.showG0 = e.target.checked; renderViewer(); });
+    $('showG1').addEventListener('change', e => { S.showG1 = e.target.checked; renderViewer(); });
+    $('showG2G3').addEventListener('change', e => { S.showG2G3 = e.target.checked; renderViewer(); });
+    $('zoomIn').addEventListener('click', () => { S.scale *= 1.3; renderViewer(); });
+    $('zoomOut').addEventListener('click', () => { S.scale *= 0.7; renderViewer(); });
+    $('resetView').addEventListener('click', () => { S.scale = 1; S.offsetX = 0; S.offsetY = 0; renderViewer(); });
+
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        S.scale = Math.max(0.1, Math.min(50, S.scale * (e.deltaY > 0 ? 0.9 : 1.1)));
+        renderViewer();
+    });
+    canvas.addEventListener('mousedown', e => { isDrag = true; dragSt = { x: e.clientX - S.offsetX, y: e.clientY - S.offsetY }; });
+    canvas.addEventListener('mousemove', e => { if (isDrag) { S.offsetX = e.clientX - dragSt.x; S.offsetY = e.clientY - dragSt.y; renderViewer(); } });
+    canvas.addEventListener('mouseup', () => isDrag = false);
+    canvas.addEventListener('mouseleave', () => isDrag = false);
+
+    document.addEventListener('dragover', e => { e.preventDefault(); $('dragOverlay').classList.add('active'); });
+    document.addEventListener('dragleave', e => { if (e.relatedTarget === null) $('dragOverlay').classList.remove('active'); });
+    document.addEventListener('drop', e => {
+        e.preventDefault(); $('dragOverlay').classList.remove('active');
+        const f = e.dataTransfer.files[0];
+        if (f) { const r = new FileReader(); r.onload = ev => loadGCode(ev.target.result, f.name); r.readAsText(f); }
+    });
+
+    window.addEventListener('resize', () => renderViewer());
+
+    // ========== Init ==========
+    loadGCode(getSampleGCode(), 'rounded-square.tap');
+    </script>
+</body>
+</html>
